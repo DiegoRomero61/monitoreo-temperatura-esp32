@@ -1,68 +1,53 @@
 import network
-import time
 import urequests
-from machine import Pin, I2C
+import time
 import dht
-import ssd1306
+from machine import Pin
 
-ssid = "ESP32test"
-password = "12345678"
 
-server_url = "http://192.168.100.120/insertar.php"
+SSID = "Totalplay-1AA2"
+PASSWORD = "1AA2197UTtNej9w"
 
-sensor = dht.DHT22(Pin(4)) 
+sensor = dht.DHT22(Pin(4))
+buzzer = Pin(15, Pin.OUT)
 
-i2c = I2C(0, scl=Pin(22), sda=Pin(21))
-oled = ssd1306.SSD1306_I2C(128, 64, i2c)
+SERVER_URL = "http://192.168.100.100/insertar.php"
 
-wifi = network.WLAN(network.STA_IF)
-wifi.active(True)
+def conectar_wifi():
+    wifi = network.WLAN(network.STA_IF)
+    wifi.active(True)
+    wifi.connect(SSID, PASSWORD)
 
-if not wifi.isconnected():
-    print("Conectando...")
-    wifi.connect(ssid, password)
-
-    timeout = 10
-    while not wifi.isconnected() and timeout > 0:
+    while not wifi.isconnected():
         time.sleep(1)
-        timeout -= 1
+    
+    print("Conectado:", wifi.ifconfig())
 
-if wifi.isconnected():
-    print("Conectado!")
-    print(wifi.ifconfig())
-else:
-    print("Error de conexión WiFi")
+def enviar_datos(temp, hum):
+    try:
+        data = {
+            "temperatura": temp,
+            "humedad": hum
+        }
+        r = urequests.post(SERVER_URL, json=data)
+        r.close()
+    except:
+        print("Error enviando datos")
+
+conectar_wifi()
 
 while True:
-    try:
-        sensor.measure()
-        temp = sensor.temperature()
-        hum = sensor.humidity()
+    sensor.measure()
+    temp = sensor.temperature()
+    hum = sensor.humidity()
 
-        print("Temp:", temp)
-        print("Hum:", hum)
+    print(temp, hum)
+    
+    if temp > 35:
+        buzzer.on()
+    else:
+        buzzer.off()
 
-        oled.fill(0)
-        oled.text("Temp: {:.1f} C".format(temp), 0, 10)
-        oled.text("Hum: {:.1f} %".format(hum), 0, 30)
-
-        if temp > 30:
-            oled.text("ALERTA!", 0, 50)
-        else:
-            oled.text("Normal", 0, 50)
-
-        oled.show()
-
-        url = "{}?temp={}&hum={}".format(server_url, temp, hum)
-
-        try:
-            response = urequests.get(url)
-            print("Enviado:", response.text)
-            response.close()
-        except Exception as e:
-            print("Error envio:", e)
-
-    except Exception as e:
-        print("Error sensor:", e)
+    enviar_datos(temp, hum)
 
     time.sleep(5)
